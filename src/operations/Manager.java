@@ -389,40 +389,44 @@ public class Manager {
 							task.finish_instruction();
 					}
 				}
-				if(blocked_tasks.size()==(T-terminated))
+				
+			}
+			if((blocked_tasks.size()==(T-terminated))&&(blocked_tasks.size()!=0))
+			{
+
+				//System.out.println("All tasks blocked "+blocked_tasks);
+				for(int t=1;t<=T;t++)
 				{
-					//System.out.println("All tasks blocked");
-					int index=0;
-					boolean deadlock_resolved=false;
-					Task abort_task = tasks[blocked_tasks.get(index)];
-					while ((!deadlock_resolved)&&(blocked_tasks.size()>0)) 
+					Task task=tasks[t];
+					if(task.blocked)
 					{
-						//System.out.println(resource_units);
 						for (int res = 1; res <= R; res++) {
 							int resources = resource_units.get(res)
-									+ abort_task.allocated_resources.get(res);
+									+ task.allocated_resources.get(res);
 							resource_units.set(res, resources);
 						}
 						//System.out.println(resource_units);
-						abort_task.abort();
+						task.abort();
 						terminated++;
-						blocked_tasks.remove(index);
-						if((blocked_tasks.size()>0))
+						int index=blocked_tasks.indexOf(t);
+						if(index!=-1)
 						{
 							
-							abort_task = tasks[blocked_tasks.get(index)];
-							//System.out.println(abort_task.blocked_resource_units+" needed");
-							if (abort_task.blocked_resource_units <= resource_units
-									.get(abort_task.blocked_resource_type)) 
-							{
+							blocked_tasks.remove(index);
+						}
+						
+						if ((t+1)<=T) 
+						{
+							task = tasks[t + 1];
+							if (task.blocked_resource_units <= resource_units
+									.get(task.blocked_resource_type)) {
 								//System.out.println("Deadlock resolved");
-								deadlock_resolved = true;
+								break;
 							}
 						}
 					}
 				}
 			}
-			
 			cycle++;
 			
 			for(int j=1;j<=R;j++)
