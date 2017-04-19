@@ -10,7 +10,7 @@ import data.Task;
 public class Manager {
 
 	public int T,R;
-	public List<Integer> resource_units;
+	public List<Integer> resource_units,released_units;
 	private String input_file;
 	public Task[] tasks;
 	public String getInput_file() {
@@ -22,6 +22,7 @@ public class Manager {
 	public Manager() {
 		// TODO Auto-generated constructor stub
 		resource_units=new ArrayList<Integer>();
+		released_units=new ArrayList<Integer>();
 	}
 	public void readRequests()
 	{
@@ -40,6 +41,7 @@ public class Manager {
 			for(int i=0;i<=R;i++)
 			{
 				resource_units.add(0);
+				released_units.add(0);
 			}
 			for(int i=1;i<=R;i++)
 			{
@@ -79,6 +81,7 @@ public class Manager {
 					tasks[t].initial_claims.set(r, c);
 				}
 			}
+			scanner.close();
 		} catch (FileNotFoundException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -111,7 +114,7 @@ public class Manager {
 				}
 				if (!is_safe_state) 
 				{
-					
+					i++;
 					continue;
 				}
 				else
@@ -156,8 +159,8 @@ public class Manager {
 				}
 				if ((!tasks_performed.contains(t))) {
 					String cmd = task.commands.get(task.current_instruction);
-					System.out.println("Command is "+cmd+cycle+t);
-					//System.out.println(resource_units);
+					//System.out.println("Command is "+cmd+cycle+t);
+					
 					if (cmd.equals("initiate"))
 					{
 						if(task.initial_claims.get(r)>resource_units.get(r))
@@ -206,13 +209,10 @@ public class Manager {
 							task.allocated_resources.set(r, resources);
 							task.finish_instruction();
 						}
-					} else if (cmd.equals("release")) {
+					} else if (cmd.equals("release")) {	
+						released_units.set(r, units);
 						
-						int resources = resource_units.get(r) + units;
-						
-						resource_units.set(r, resources);
-						
-						resources = task.allocated_resources.get(r) - units;
+						int resources = task.allocated_resources.get(r) - units;
 						task.allocated_resources.set(r, resources);
 						task.finish_instruction();
 					} else if (cmd.equals("compute")) {
@@ -227,6 +227,14 @@ public class Manager {
 					
 			}
 			cycle++;
+			for(int j=1;j<=R;j++)
+			{
+				int resources=resource_units.get(j)+released_units.get(j);
+				resource_units.set(j, resources);
+			}
+			released_units.clear();
+			for(int j=0;j<=R;j++)
+				released_units.add(0);
 			tasks_performed.clear();
 		}
 	}
@@ -254,14 +262,192 @@ public class Manager {
 	}
 	public void allocate_optimistic()
 	{
-		
+		int cycle=0,terminated=0;
+		List<Integer> blocked_tasks=new ArrayList<Integer>();
+		List<Integer> temp_task_index=new ArrayList<Integer>();
+		List<Integer> tasks_performed=new ArrayList<Integer>();
+		while(terminated!=T)
+		{
+			int i=0;
+			for(int x:blocked_tasks)
+			{
+				Task task=tasks[x];
+				//System.out.println("Task "+x+" is blocked");
+				int r=task.blocked_resource_type;
+				int units=task.blocked_resource_units;
+				if(units>resource_units.get(r))
+				{
+					i++;
+					continue;
+				}
+				else
+				{
+					int resources = resource_units.get(r) - units;
+					resource_units.set(r, resources);
+					resources = task.allocated_resources.get(r) + units;
+					task.allocated_resources.set(r, resources);
+					//System.out.println("Task "+x+"unblocked");
+					task.unblock();
+					task.finish_instruction();
+					temp_task_index.add(i);
+					tasks_performed.add(x);
+				}
+				
+				i++;
+			}
+			//System.out.println(blocked_tasks);
+			//System.out.println(temp_task_index);
+			for(int x:temp_task_index)
+				blocked_tasks.remove(x);
+			//System.out.println(blocked_tasks);
+			temp_task_index.clear();
+			
+			for(int t=1;t<=T;t++)
+			{
+				//System.out.println("On task "+t);
+				Task task=tasks[t];
+				//System.out.println("Current instruction is "+task.current_instruction);
+				if(task.aborted)
+				{
+					continue;
+				}
+				if(task.terminated)
+				{
+					continue;
+				}
+				if(task.blocked)
+				{
+					task.add_blocked_cycle();
+					continue;
+				}
+				if(task.computing_cycles!=0)
+				{
+					task.add_computing_cycle();
+					if(task.computing_cycles==0)
+						task.finish_instruction();
+					continue;
+				}
+				
+				String cmd = task.commands.get(task.current_instruction);
+				
+				
+				
+				int r = task.resource_type_or_no_cycles.get(task.current_instruction);
+				int units = task.number.get(task.current_instruction);
+				if ((!tasks_performed.contains(t)))
+				{
+					//System.out.println("Command is "+cmd+cycle+t);
+					//System.out.println("Not blocked");
+					
+					
+					if(cmd.equals("initiate"))
+					{
+						task.finish_instruction();
+						continue;
+					}
+					if (cmd.equals("terminate")) 
+					{
+						task.terminate(cycle - 1 + 1);
+						task.finish_instruction();
+						terminated++;
+						continue;
+					}
+					if (cmd.equals("request")) 
+					{
+						if(units>resource_units.get(r)) 
+						{
+							//System.out.println("Blocking task "+t);
+							blocked_tasks.add(t);
+							task.block(r,units);
+							task.add_blocked_cycle();
+						} 
+						else 
+						{
+							//System.out.println("Task "+t+" requesting "+units);
+							int resources = resource_units.get(r) - units;
+							resource_units.set(r, resources);
+							resources = task.allocated_resources.get(r) + units;
+							task.allocated_resources.set(r, resources);
+							task.finish_instruction();
+						}
+					}
+					else if (cmd.equals("release")) 
+					{
+						released_units.set(r, units);
+						
+						int resources = task.allocated_resources.get(r) - units;
+						task.allocated_resources.set(r, resources);
+						task.finish_instruction();
+						
+					} 
+					else if (cmd.equals("compute")) 
+					{
+						
+						task.start_computing(r);
+						task.add_computing_cycle();
+						if(task.computing_cycles==0)
+							task.finish_instruction();
+					}
+				}
+				if(blocked_tasks.size()==(T-terminated))
+				{
+					//System.out.println("All tasks blocked");
+					int index=0;
+					boolean deadlock_resolved=false;
+					Task abort_task = tasks[blocked_tasks.get(index)];
+					while ((!deadlock_resolved)&&(blocked_tasks.size()>0)) 
+					{
+						//System.out.println(resource_units);
+						for (int res = 1; res <= R; res++) {
+							int resources = resource_units.get(res)
+									+ abort_task.allocated_resources.get(res);
+							resource_units.set(res, resources);
+						}
+						//System.out.println(resource_units);
+						abort_task.abort();
+						terminated++;
+						blocked_tasks.remove(index);
+						if((blocked_tasks.size()>0))
+						{
+							
+							abort_task = tasks[blocked_tasks.get(index)];
+							//System.out.println(abort_task.blocked_resource_units+" needed");
+							if (abort_task.blocked_resource_units <= resource_units
+									.get(abort_task.blocked_resource_type)) 
+							{
+								//System.out.println("Deadlock resolved");
+								deadlock_resolved = true;
+							}
+						}
+					}
+				}
+			}
+			
+			cycle++;
+			
+			for(int j=1;j<=R;j++)
+			{
+				int resources=resource_units.get(j)+released_units.get(j);
+				resource_units.set(j, resources);
+			}
+			released_units.clear();
+			for(int j=0;j<=R;j++)
+				released_units.add(0);
+			tasks_performed.clear();
+		}
 	}
 	public static void main(String[] args)
 	{
 		Manager a =new Manager();
 		a.setInput_file(args[0]);
 		a.readRequests();
-		a.allocate_bankers();
+		a.allocate_optimistic();
 		a.print_output();
+		Manager b =new Manager();
+		b.setInput_file(args[0]);
+		b.readRequests();
+		b.allocate_bankers();
+		b.print_output();	
+		
 	}
 }

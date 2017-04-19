@@ -37,6 +37,7 @@ public class Task {
 	}
 	public void finish_instruction()
 	{
+		//System.out.println("Updated instruction for "+id);
 		current_instruction++;
 	}
 	public void abort()
